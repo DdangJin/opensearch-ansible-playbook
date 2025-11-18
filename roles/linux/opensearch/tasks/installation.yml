@@ -1,0 +1,75 @@
+---
+- name: OpenSearch Install | Create opensearch group
+  ansible.builtin.group:
+    name: "{{ os_user }}"
+    gid: 499
+    state: present
+
+- name: OpenSearch Install | Create opensearch user
+  ansible.builtin.user:
+    name: "{{ os_user }}"
+    uid: 498
+    state: present
+    system: yes
+    shell: /sbin/nologin
+    create_home: true
+    home: "/home/{{ os_user }}"
+    group: "{{ os_user }}"
+    comment: "opensearch user/group"
+
+- name: OpenSearch Install | Install from .deb
+  when: ansible_os_family == 'Debian'
+  block:
+    - name: OpenSearch Install | Import GPG key
+      ansible.builtin.shell: |
+        curl -o- https://artifacts.opensearch.org/publickeys/opensearch-release.pgp | \
+        gpg --dearmor --batch --yes -o /usr/share/keyrings/opensearch-release-keyring
+      args:
+        creates: /usr/share/keyrings/opensearch-release-keyring
+
+    - name: OpenSearch Install | Deploy deb repository file
+      ansible.builtin.apt_repository:
+        repo: deb [signed-by=/usr/share/keyrings/opensearch-release-keyring] https://artifacts.opensearch.org/releases/bundle/opensearch/3.x/apt stable main
+        state: present
+        filename: opensearch-3.x
+        update_cache: true
+
+    - name: OpenSearch Install | Get installed Packages
+      package_facts:
+        manager: "auto"
+
+    - name: OpenSearch Install | Unhold opensearch
+      ansible.builtin.dpkg_selections:
+        name: opensearch
+        selection: install
+      when: "'opensearch' in ansible_facts.packages"
+
+    - name: OpenSearch Install | Install OpenSearch
+      ansible.builtin.apt:
+        name: opensearch={{ os_version }}
+        state: present
+      environment:
+        OPENSEARCH_INITIAL_ADMIN_PASSWORD: "{{ admin_password }}"
+
+    - name: OpenSearch Install | Hold opensearch
+      ansible.builtin.dpkg_selections:
+        name: opensearch
+        selection: hold
+
+- name: OpenSearch Install | Install from tar
+  when: ansible_os_family != 'Debian'
+  block:
+    - name: OpenSearch Install | Download opensearch {{ os_version }}
+      ansible.builtin.get_url:
+        url: "{{ os_download_url }}/{{ os_version }}/opensearch-{{ os_version }}-linux-x64.tar.gz"
+        dest: "/tmp/opensearch.tar.gz"
+      register: download
+
+    - name: OpenSearch Install | Extract the tar file
+      ansible.builtin.command: chdir=/tmp/ tar -xvzf opensearch.tar.gz -C "{{ os_home }}" --strip-components=1
+      when: download.changed or iac_enable
+
+    - name: OpenSearch Install | create systemd service
+      ansible.builtin.template:
+        src: opensearch.service
+        dest: "{{ systemctl_path }}/opensearch.service"
