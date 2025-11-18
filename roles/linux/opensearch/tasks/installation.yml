@@ -1,4 +1,22 @@
 ---
+- name: OpenSearch Install | Create opensearch group
+  ansible.builtin.group:
+    name: "{{ os_user }}"
+    gid: 499
+    state: present
+
+- name: OpenSearch Install | Create opensearch user
+  ansible.builtin.user:
+    name: "{{ os_user }}"
+    uid: 498
+    state: present
+    system: yes
+    shell: /sbin/nologin
+    create_home: true
+    home: "/home/{{ os_user }}"
+    group: "{{ os_user }}"
+    comment: "opensearch user/group"
+
 - name: OpenSearch Install | Install from .deb
   when: ansible_os_family == 'Debian'
   block:
@@ -46,23 +64,6 @@
         url: "{{ os_download_url }}/{{ os_version }}/opensearch-{{ os_version }}-linux-x64.tar.gz"
         dest: "/tmp/opensearch.tar.gz"
       register: download
-
-    - name: OpenSearch Install | Create opensearch user
-      ansible.builtin.user:
-        name: "{{ os_user }}"
-        state: present
-        shell: /bin/false
-        create_home: true
-        home: "{{ os_home }}"
-      when: download.changed or iac_enable
-
-    - name: OpenSearch Install | Create home directory
-      ansible.builtin.file:
-        path: "{{ os_home }}"
-        state: directory
-        owner: "{{ os_user }}"
-        group: "{{ os_user }}"
-      when: download.changed or iac_enable
 
     - name: OpenSearch Install | Extract the tar file
       ansible.builtin.command: chdir=/tmp/ tar -xvzf opensearch.tar.gz -C "{{ os_home }}" --strip-components=1
