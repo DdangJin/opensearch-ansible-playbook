@@ -1,4 +1,16 @@
 ---
+- name: Security Plugin configuration | Remove demo security files
+  ansible.builtin.file:
+    path: "{{ os_conf_dir }}/{{ item }}"
+    state: absent
+  with_items:
+    - "securityadmin_demo.sh"
+    - "esnode-key.pem"
+    - "esnode.pem"
+    - "kirk-key.pem"
+    - "kirk.pem"
+    #- "root-ca.pem"
+  when: ansible_os_family == 'Debian'
 
 ## Here we are going to use self-signed certificates for Transport (Node-Node communication) & REST API layer
 ## Using searchguard offline TLS tool to create node & root certificates
@@ -249,7 +261,6 @@
 - name: Security Plugin configuration | Check for a custom configuration for internal users and hash passwords for them
   when: custom_users_result.stat.exists
   block:
-
     - name: Security Plugin configuration | Load custom internal users configuration
       ansible.builtin.include_vars:
         file: files/internal_users.yml
